@@ -2,12 +2,15 @@
 
 export * from './types.js';
 export * from './markets/index.js';
+export * from './config.js';
+export * from './risk.js';
 
 import type { Exchange, Market, MarketConnector, HarnessConfig } from './types.js';
 import { createKalshiConnector } from './markets/kalshi.js';
 import { createPolymarketConnector } from './markets/polymarket.js';
 import { createTradingViewConnector } from './markets/tradingview.js';
 import { createCryptoConnector } from './markets/crypto.js';
+import { createAlpacaConnector } from './markets/alpaca.js';
 
 export class OpenTradex {
   private connectors: Map<Exchange, MarketConnector> = new Map();
@@ -17,6 +20,7 @@ export class OpenTradex {
     this.connectors.set('polymarket', createPolymarketConnector(config.polymarket));
     this.connectors.set('tradingview', createTradingViewConnector());
     this.connectors.set('crypto', createCryptoConnector());
+    this.connectors.set('alpaca', createAlpacaConnector(config.alpaca));
   }
 
   /** Get a specific market connector */

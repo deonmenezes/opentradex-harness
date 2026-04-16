@@ -1,6 +1,6 @@
 /** Core types for OpenTradex harness */
 
-export type Exchange = 'kalshi' | 'polymarket' | 'tradingview' | 'crypto';
+export type Exchange = 'kalshi' | 'polymarket' | 'tradingview' | 'crypto' | 'alpaca';
 export type Side = 'yes' | 'no' | 'long' | 'short';
 
 export interface Market {
@@ -63,4 +63,5 @@ export interface HarnessConfig {
   polymarket?: { baseUrl?: string };
   tradingview?: { apiKey?: string };
   crypto?: { provider?: 'coingecko' | 'kraken' };
+  alpaca?: { apiKey?: string; secretKey?: string; paper?: boolean };
 }

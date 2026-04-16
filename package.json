@@ -1,7 +1,7 @@
 {
   "name": "opentradex",
   "version": "0.1.0",
-  "description": "Lightweight AI harness connecting prediction markets, crypto, and stocks",
+  "description": "Lightweight AI trading harness for prediction markets, stocks, and crypto. Paper-first, easily switchable to live.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,13 +16,22 @@
     "./gateway": {
       "import": "./dist/gateway/index.js",
       "types": "./dist/gateway/index.d.ts"
+    },
+    "./config": {
+      "import": "./dist/config.js",
+      "types": "./dist/config.d.ts"
+    },
+    "./risk": {
+      "import": "./dist/risk.js",
+      "types": "./dist/risk.d.ts"
     }
   },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/bin/cli.js",
-    "gateway": "node dist/bin/cli.js serve",
+    "gateway": "node dist/bin/cli.js run",
+    "onboard": "node dist/bin/cli.js onboard",
     "test": "node --test dist/**/*.test.js"
   },
   "keywords": [
@@ -30,12 +39,23 @@
     "prediction-markets",
     "kalshi",
     "polymarket",
-    "tradingview",
+    "alpaca",
+    "stocks",
     "crypto",
-    "ai-harness"
+    "ai-harness",
+    "paper-trading",
+    "trading-bot"
   ],
-  "author": "",
+  "author": "deonmenezes",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deonmenezes/opentradex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deonmenezes/opentradex/issues"
+  },
+  "homepage": "https://github.com/deonmenezes/opentradex#readme",
   "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.0.0",

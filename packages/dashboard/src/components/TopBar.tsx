@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo, useMemo, useCallback } from 'react';
 import type { HarnessStatus } from '../lib/types';
 
 interface TopBarProps {
@@ -7,7 +7,8 @@ interface TopBarProps {
   onToggleAutoLoop?: () => void;
 }
 
-export default function TopBar({ status, onRunCycle, onToggleAutoLoop }: TopBarProps) {
+// Memoized TopBar to prevent unnecessary re-renders
+export default memo(function TopBar({ status, onRunCycle, onToggleAutoLoop }: TopBarProps) {
   const [pnlFlash, setPnlFlash] = useState(false);
   const [prevPnL, setPrevPnL] = useState(status.dayPnL);
 
@@ -216,4 +217,4 @@ export default function TopBar({ status, onRunCycle, onToggleAutoLoop }: TopBarP
       </div>
     </header>
   );
-}
+});

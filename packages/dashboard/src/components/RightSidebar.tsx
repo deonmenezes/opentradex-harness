@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, memo, useCallback } from 'react';
 import type { FeedItem } from '../lib/types';
 
 interface RightSidebarProps {
@@ -21,11 +21,11 @@ const feedTabs = [
   { id: 'social', label: 'Social', icon: 'M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z' },
 ];
 
-export default function RightSidebar({ feed }: RightSidebarProps) {
+export default memo(function RightSidebar({ feed }: RightSidebarProps) {
   const [activeTab, setActiveTab] = useState('all');
   const [readItems, setReadItems] = useState<Set<string>>(new Set());
 
-  // Filter feed based on active tab
+  // Memoized filtered feed
   const filteredFeed = useMemo(() => {
     if (activeTab === 'all') return feed;
     if (activeTab === 'news') return feed.filter(item => ['reuters', 'bloomberg', 'ft'].includes(item.source));
@@ -33,11 +33,13 @@ export default function RightSidebar({ feed }: RightSidebarProps) {
     return feed;
   }, [feed, activeTab]);
 
-  const unreadCount = feed.length - readItems.size;
+  // Memoized unread count
+  const unreadCount = useMemo(() => feed.length - readItems.size, [feed.length, readItems.size]);
 
-  const markAsRead = (id: string) => {
+  // Memoized callback
+  const markAsRead = useCallback((id: string) => {
     setReadItems(prev => new Set([...prev, id]));
-  };
+  }, []);
 
   return (
     <aside className="w-80 bg-surface border-l border-border flex flex-col overflow-hidden shrink-0">
@@ -184,4 +186,4 @@ export default function RightSidebar({ feed }: RightSidebarProps) {
       </div>
     </aside>
   );
-}
+});

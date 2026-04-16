@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo, useMemo } from 'react';
 import type { Position, Trade, Market } from '../lib/types';
 
 interface LeftSidebarProps {
@@ -16,18 +16,22 @@ const exchangeStyles: Record<string, { bg: string; text: string }> = {
   tradingview: { bg: 'bg-green-500/20', text: 'text-green-400' },
 };
 
-export default function LeftSidebar({ positions, trades, markets }: LeftSidebarProps) {
+export default memo(function LeftSidebar({ positions, trades, markets }: LeftSidebarProps) {
   const [positionSort, setPositionSort] = useState<'pnl' | 'size'>('pnl');
 
-  // Sort positions
-  const sortedPositions = [...positions].sort((a, b) => {
-    if (positionSort === 'pnl') return Math.abs(b.pnl) - Math.abs(a.pnl);
-    return b.size - a.size;
-  });
+  // Memoized sorted positions
+  const sortedPositions = useMemo(() => {
+    return [...positions].sort((a, b) => {
+      if (positionSort === 'pnl') return Math.abs(b.pnl) - Math.abs(a.pnl);
+      return b.size - a.size;
+    });
+  }, [positions, positionSort]);
 
-  // Calculate totals
-  const totalPnL = positions.reduce((sum, p) => sum + p.pnl, 0);
-  const totalValue = positions.reduce((sum, p) => sum + (p.size * p.currentPrice), 0);
+  // Memoized totals
+  const { totalPnL, totalValue } = useMemo(() => ({
+    totalPnL: positions.reduce((sum, p) => sum + p.pnl, 0),
+    totalValue: positions.reduce((sum, p) => sum + (p.size * p.currentPrice), 0),
+  }), [positions]);
 
   return (
     <aside className="w-80 bg-surface border-r border-border flex flex-col overflow-hidden shrink-0">
@@ -283,4 +287,4 @@ export default function LeftSidebar({ positions, trades, markets }: LeftSidebarP
       </section>
     </aside>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
 import type { HarnessStatus } from '../lib/types';
 
 interface ChatCockpitProps {
@@ -27,7 +27,7 @@ const missionCards = [
   { id: '3', title: 'TRADINGVIEW PASS', description: 'Use the TradingView lane and focus on this watchlist: SPY, QQQ, BTCUSD, NQ1!. Tell me which symbols or macro instruments deserve attention.' },
 ];
 
-export default function ChatCockpit({ selectedChannel, onChannelChange, onCommand, status }: ChatCockpitProps) {
+export default memo(function ChatCockpit({ selectedChannel, onChannelChange, onCommand, status }: ChatCockpitProps) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -225,4 +225,4 @@ export default function ChatCockpit({ selectedChannel, onChannelChange, onComman
       </div>
     </main>
   );
-}
+});

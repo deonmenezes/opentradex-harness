@@ -133,6 +133,29 @@ input::placeholder, textarea::placeholder {
   @apply px-4 py-3 border-b border-border flex items-center justify-between;
 }
 
+/* Houston-style softer section header — used inside sidebars to reduce visual noise */
+.hs-section-header {
+  @apply px-4 pt-4 pb-2 flex items-center justify-between;
+}
+
+.hs-section-label {
+  @apply text-xs font-medium text-text-dim tracking-normal normal-case;
+}
+
+/* Rounded, breathing list row with subtle hover — mirrors Houston's sidebar-item-row */
+.hs-row {
+  @apply mx-2 my-0.5 px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors duration-100 cursor-pointer;
+}
+
+.hs-row-active {
+  @apply bg-surface-2;
+}
+
+/* Subtle inline action button — flatter than btn-primary */
+.hs-btn {
+  @apply text-2xs px-2 py-1 rounded-md transition-colors;
+}
+
 .panel-content {
   @apply p-4;
 }

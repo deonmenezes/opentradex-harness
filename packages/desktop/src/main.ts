@@ -11,51 +11,54 @@ let mainWindow: BrowserWindow | null = null;
 let gatewayProcess: ChildProcess | null = null;
 
 const isDev = process.env.NODE_ENV === 'development';
+const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
 const GATEWAY_PORT = 3210;
 const DASHBOARD_PORT = 3000;
 
-// Get resource paths
-function getResourcePath(relativePath: string): string {
-  if (isDev) {
-    return path.join(__dirname, '..', '..', relativePath);
-  }
-  return path.join(process.resourcesPath, relativePath);
-}
-
 // Start the gateway server
 async function startGateway(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const gatewayPath = path.join(__dirname, '..', '..', '..', 'dist', 'bin', 'cli.js');
+  return new Promise((resolve) => {
+    // In dev: resolve from packages/desktop/dist → project root.
+    // In packaged: expect gateway bundled at resources/app/dist/bin/cli.js.
+    const candidates = [
+      path.join(__dirname, '..', '..', '..', 'dist', 'bin', 'cli.js'),
+      path.join(process.resourcesPath || '', 'app', 'dist', 'bin', 'cli.js'),
+      path.join(process.resourcesPath || '', 'dist', 'bin', 'cli.js'),
+    ];
+    const gatewayPath = candidates.find((p) => p && fs.existsSync(p));
 
-    if (!fs.existsSync(gatewayPath)) {
-      console.log('Gateway not found at:', gatewayPath);
-      resolve(); // Continue without gateway
+    if (!gatewayPath) {
+      console.log('[Gateway] cli.js not found — dashboard will expect an externally-running gateway');
+      resolve();
       return;
     }
 
     gatewayProcess = spawn('node', [gatewayPath, 'run', String(GATEWAY_PORT)], {
       stdio: 'pipe',
+      shell: isWin,
+      windowsHide: true,
       env: { ...process.env, NODE_ENV: 'production' },
     });
 
-    gatewayProcess.stdout?.on('data', (data) => {
-      console.log('[Gateway]', data.toString());
-      if (data.toString().includes('gateway running')) {
-        resolve();
-      }
-    });
-
-    gatewayProcess.stderr?.on('data', (data) => {
-      console.error('[Gateway Error]', data.toString());
-    });
-
+    gatewayProcess.stdout?.on('data', (data) => console.log('[Gateway]', data.toString().trim()));
+    gatewayProcess.stderr?.on('data', (data) => console.error('[Gateway err]', data.toString().trim()));
     gatewayProcess.on('error', (err) => {
       console.error('Failed to start gateway:', err);
-      resolve(); // Continue anyway
+      resolve();
     });
 
-    // Timeout after 5 seconds
-    setTimeout(resolve, 5000);
+    // Poll the gateway until it answers, then resolve.
+    const deadline = Date.now() + 15000;
+    const ping = async (): Promise<void> => {
+      try {
+        const res = await fetch(`http://127.0.0.1:${GATEWAY_PORT}/api/health`, { signal: AbortSignal.timeout(500) });
+        if (res.ok) return resolve();
+      } catch { /* not ready */ }
+      if (Date.now() > deadline) return resolve();
+      setTimeout(ping, 250);
+    };
+    setTimeout(ping, 300);
   });
 }
 
@@ -69,34 +72,29 @@ function stopGateway(): void {
 
 // Create the main window
 function createWindow(): void {
+  const iconFile = isWin ? 'icon.ico' : isMac ? 'icon.icns' : 'icon.png';
+  const iconPath = path.join(__dirname, '..', 'assets', iconFile);
+
   mainWindow = new BrowserWindow({
     width: 1600,
     height: 1000,
     minWidth: 1200,
     minHeight: 700,
     backgroundColor: '#0B0F14',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 15 },
+    // hiddenInset is macOS-only; Windows gets a normal title bar.
+    ...(isMac ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 15, y: 15 } } : {}),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+    ...(fs.existsSync(iconPath) ? { icon: iconPath } : {}),
   });
 
-  // Load the dashboard
-  if (isDev) {
-    mainWindow.loadURL(`http://localhost:${DASHBOARD_PORT}`);
-    mainWindow.webContents.openDevTools();
-  } else {
-    const dashboardPath = getResourcePath('dashboard/index.html');
-    if (fs.existsSync(dashboardPath)) {
-      mainWindow.loadFile(dashboardPath);
-    } else {
-      mainWindow.loadURL(`http://localhost:${DASHBOARD_PORT}`);
-    }
-  }
+  // Load the dashboard. The gateway (port 3210) already serves the built dashboard,
+  // so we point there in both dev and prod — single source of truth.
+  mainWindow.loadURL(`http://127.0.0.1:${GATEWAY_PORT}`);
+  if (isDev) mainWindow.webContents.openDevTools();
 
   // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -111,28 +109,34 @@ function createWindow(): void {
 
 // Create application menu
 function createMenu(): void {
+  const appMenuSubmenu: Electron.MenuItemConstructorOptions[] = [
+    { role: 'about' },
+    { type: 'separator' },
+    {
+      label: 'Preferences...',
+      accelerator: 'CmdOrCtrl+,',
+      click: () => {
+        mainWindow?.webContents.send('open-settings');
+      },
+    },
+    { type: 'separator' },
+    ...(isMac
+      ? ([
+          { role: 'services' as const },
+          { type: 'separator' as const },
+          { role: 'hide' as const },
+          { role: 'hideOthers' as const },
+          { role: 'unhide' as const },
+          { type: 'separator' as const },
+        ] as Electron.MenuItemConstructorOptions[])
+      : []),
+    { role: 'quit' },
+  ];
+
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: 'OpenTradex',
-      submenu: [
-        { role: 'about' },
-        { type: 'separator' },
-        {
-          label: 'Preferences...',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => {
-            mainWindow?.webContents.send('open-settings');
-          },
-        },
-        { type: 'separator' },
-        { role: 'services' },
-        { type: 'separator' },
-        { role: 'hide' },
-        { role: 'hideOthers' },
-        { role: 'unhide' },
-        { type: 'separator' },
-        { role: 'quit' },
-      ],
+      submenu: appMenuSubmenu,
     },
     {
       label: 'Edit',
@@ -199,14 +203,19 @@ function createMenu(): void {
     },
     {
       label: 'Window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        { type: 'separator' },
-        { role: 'front' },
-        { type: 'separator' },
-        { role: 'window' },
-      ],
+      submenu: isMac
+        ? [
+            { role: 'minimize' },
+            { role: 'zoom' },
+            { type: 'separator' },
+            { role: 'front' },
+            { type: 'separator' },
+            { role: 'window' },
+          ]
+        : [
+            { role: 'minimize' },
+            { role: 'close' },
+          ],
     },
     {
       label: 'Help',

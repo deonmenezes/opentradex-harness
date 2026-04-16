@@ -5,8 +5,11 @@ interface TopBarProps {
   status: HarnessStatus;
   onRunCycle?: () => void;
   onToggleAutoLoop?: () => void;
+  onSetLoopInterval?: (minutes: number) => void;
   onToggleLeftSidebar?: () => void;
   onToggleRightSidebar?: () => void;
+  onShowTrades?: () => void;
+  onShowMarkets?: () => void;
 }
 
 // Memoized TopBar to prevent unnecessary re-renders
@@ -14,9 +17,26 @@ export default memo(function TopBar({
   status,
   onRunCycle,
   onToggleAutoLoop,
+  onSetLoopInterval,
   onToggleLeftSidebar,
-  onToggleRightSidebar
+  onToggleRightSidebar,
+  onShowTrades,
+  onShowMarkets
 }: TopBarProps) {
+  const [loopMenuOpen, setLoopMenuOpen] = useState(false);
+  const loopIntervals = [1, 2, 5, 10, 15, 30];
+
+  const handlePickInterval = (minutes: number) => {
+    setLoopMenuOpen(false);
+    if (onSetLoopInterval) onSetLoopInterval(minutes);
+    else if (onToggleAutoLoop) onToggleAutoLoop();
+  };
+
+  const handleStopLoop = () => {
+    setLoopMenuOpen(false);
+    if (onSetLoopInterval) onSetLoopInterval(0);
+    else if (onToggleAutoLoop) onToggleAutoLoop();
+  };
   const [pnlFlash, setPnlFlash] = useState(false);
   const [prevPnL, setPrevPnL] = useState(status.dayPnL);
 
@@ -86,41 +106,51 @@ export default memo(function TopBar({
         </div>
       </div>
 
-      {/* Center: Capital & P&L */}
-      <div className="flex items-center gap-2 md:gap-6">
+      {/* Center: Capital & P&L — compact, inline */}
+      <div className="flex items-center gap-4 md:gap-5">
         {/* Capital */}
-        <div className="text-center">
-          <div className="text-lg md:text-2xl lg:text-3xl font-bold text-text tracking-tight">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-2xs text-text-dim uppercase tracking-wide">Portfolio</span>
+          <span className="text-sm md:text-base font-semibold text-text tabular-nums">
             {formatCurrency(status.capital)}
-          </div>
-          <div className="text-2xs md:text-xs text-text-dim hidden sm:block">Portfolio</div>
+          </span>
         </div>
 
         {/* Day P&L */}
-        <div className={`text-center px-3 md:px-4 py-1 md:py-2 rounded-lg transition-all duration-300 ${
-          status.dayPnL >= 0
-            ? 'bg-accent/10 border border-accent/30'
-            : 'bg-danger/10 border border-danger/30'
-        } ${pnlFlash ? 'scale-105' : ''}`}>
-          <div className={`text-sm md:text-lg lg:text-xl font-bold ${status.dayPnL >= 0 ? 'text-accent' : 'text-danger'}`}>
+        <div className={`flex items-baseline gap-1.5 px-2.5 py-1 rounded-md transition-colors ${
+          status.dayPnL >= 0 ? 'bg-accent/10' : 'bg-danger/10'
+        } ${pnlFlash ? 'ring-1 ring-accent/40' : ''}`}>
+          <span className="text-2xs text-text-dim uppercase tracking-wide">Day</span>
+          <span className={`text-sm font-semibold tabular-nums ${status.dayPnL >= 0 ? 'text-accent' : 'text-danger'}`}>
             {formatPnL(status.dayPnL)}
-          </div>
-          <div className="text-2xs text-text-dim hidden sm:block">Day P&L</div>
+          </span>
         </div>
 
-        {/* Stats - Hidden on small screens */}
-        <div className="hidden xl:flex items-center gap-2">
-          <div className="text-center px-3 py-1 rounded-lg bg-surface-2">
-            <div className="text-lg font-bold text-text">{status.trades}</div>
-            <div className="text-2xs text-text-dim">Trades</div>
+        {/* Stats - inline chips on large screens */}
+        <div className="hidden xl:flex items-center gap-3 text-xs">
+          <button
+            onClick={onShowTrades}
+            className="flex items-baseline gap-1 text-text-dim hover:text-text transition-colors"
+            aria-label="View all trades"
+          >
+            <span className="text-text font-medium tabular-nums">{status.trades}</span>
+            <span>trades</span>
+          </button>
+          <button
+            onClick={onShowMarkets}
+            className="flex items-baseline gap-1 text-text-dim hover:text-text transition-colors"
+            aria-label="View all markets"
+          >
+            <span className="text-accent font-medium">live</span>
+            <span>markets</span>
+          </button>
+          <div className="flex items-baseline gap-1 text-text-dim">
+            <span className={`font-medium tabular-nums ${status.winRate >= 50 ? 'text-accent' : 'text-warning'}`}>{status.winRate}%</span>
+            <span>win</span>
           </div>
-          <div className="text-center px-3 py-1 rounded-lg bg-surface-2">
-            <div className={`text-lg font-bold ${status.winRate >= 50 ? 'text-accent' : 'text-warning'}`}>{status.winRate}%</div>
-            <div className="text-2xs text-text-dim">Win</div>
-          </div>
-          <div className="text-center px-3 py-1 rounded-lg bg-surface-2">
-            <div className="text-lg font-bold text-text">{status.openPositions}</div>
-            <div className="text-2xs text-text-dim">Open</div>
+          <div className="flex items-baseline gap-1 text-text-dim">
+            <span className="text-text font-medium tabular-nums">{status.openPositions}</span>
+            <span>open</span>
           </div>
         </div>
       </div>
@@ -138,20 +168,62 @@ export default memo(function TopBar({
           <span className="hidden sm:inline">Run</span>
         </button>
 
-        {/* Auto Loop - Responsive */}
-        <button
-          onClick={onToggleAutoLoop}
-          className={`hidden sm:flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
-            status.isAutoLoop
-              ? 'bg-accent text-bg shadow-lg shadow-accent/30'
-              : 'bg-surface-2 text-text border border-border hover:border-accent'
-          }`}
-        >
-          <svg className={`w-4 h-4 ${status.isAutoLoop ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span className="hidden md:inline">{status.isAutoLoop ? 'Stop' : 'Loop'}</span>
-        </button>
+        {/* Auto Loop with interval picker */}
+        <div className="relative hidden sm:block">
+          <button
+            onClick={() => setLoopMenuOpen((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-semibold text-sm transition-all ${
+              status.isAutoLoop
+                ? 'bg-accent text-bg shadow-lg shadow-accent/30'
+                : 'bg-surface-2 text-text border border-border hover:border-accent'
+            }`}
+          >
+            <svg className={`w-4 h-4 ${status.isAutoLoop ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span className="hidden md:inline">
+              {status.isAutoLoop ? `Loop · ${status.cycleInterval}m` : 'Loop'}
+            </span>
+            <svg className="w-3 h-3 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {loopMenuOpen && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setLoopMenuOpen(false)} />
+              <div className="absolute right-0 mt-2 w-52 rounded-lg bg-surface border border-border shadow-xl z-50 overflow-hidden">
+                <div className="px-3 py-2 text-2xs uppercase tracking-wide text-text-dim border-b border-border">
+                  Cron Interval
+                </div>
+                {loopIntervals.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => handlePickInterval(m)}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-surface-2 transition-colors flex items-center justify-between ${
+                      status.isAutoLoop && status.cycleInterval === m ? 'bg-accent/10 text-accent' : 'text-text'
+                    }`}
+                  >
+                    <span>Every {m} minute{m > 1 ? 's' : ''}</span>
+                    {status.isAutoLoop && status.cycleInterval === m && (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                ))}
+                {status.isAutoLoop && (
+                  <button
+                    onClick={handleStopLoop}
+                    className="w-full text-left px-3 py-2 text-sm text-danger hover:bg-danger/10 border-t border-border"
+                  >
+                    Stop loop
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Mobile Menu Button - Right Sidebar */}
         <button

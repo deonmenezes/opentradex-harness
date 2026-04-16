@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /** OpenTradex CLI - Multi-market AI trading harness */
 
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { OpenTradex } from '../index.js';
 import { createGateway } from '../gateway/index.js';
 import { runOnboard, showStatus } from '../onboard.js';
@@ -16,6 +18,8 @@ import {
   getRiskState,
   isTradingHalted,
 } from '../risk.js';
+import { initializeAI, getAI } from '../ai/index.js';
+import { startMCPServer } from '../mcp/index.js';
 import type { Exchange } from '../types.js';
 
 const VERSION = '0.1.0';
@@ -43,7 +47,23 @@ function printBadge(): void {
   print(`${colors[badge.color]} ${badge.text} ${reset}\n`);
 }
 
+function loadDotEnv(): void {
+  const envPath = join(CONFIG_DIR, '.env');
+  if (!existsSync(envPath)) return;
+  const content = readFileSync(envPath, 'utf-8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq < 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const val = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (key && process.env[key] === undefined) process.env[key] = val;
+  }
+}
+
 async function main(): Promise<void> {
+  loadDotEnv();
   const [cmd, ...args] = process.argv.slice(2);
 
   switch (cmd) {
@@ -232,6 +252,59 @@ async function main(): Promise<void> {
       break;
     }
 
+    // ============ MCP SERVER ============
+    case 'mcp': {
+      await startMCPServer();
+      break;
+    }
+
+    // ============ AI ============
+    case 'ai': {
+      const subCmd = args[0];
+
+      if (subCmd === 'status') {
+        const ai = getAI();
+        const config = ai.getConfig();
+        print(`AI Status: ${ai.isAvailable() ? '\x1b[32mAvailable\x1b[0m' : '\x1b[31mNot configured\x1b[0m'}`);
+        print(`Model: ${config.model}`);
+        print(`API Key: ${config.hasApiKey ? 'Configured' : 'Not set'}`);
+      } else if (subCmd === 'init') {
+        const apiKey = args[1] || process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+          printError('Usage: opentradex ai init <api-key>');
+          printError('Or set ANTHROPIC_API_KEY environment variable');
+          process.exit(1);
+        }
+        const success = initializeAI(apiKey);
+        if (success) {
+          printSuccess('AI initialized successfully!');
+        } else {
+          printError('Failed to initialize AI');
+        }
+      } else if (subCmd === 'chat') {
+        const message = args.slice(1).join(' ');
+        if (!message) {
+          printError('Usage: opentradex ai chat <message>');
+          process.exit(1);
+        }
+        const ai = getAI();
+        if (!ai.isAvailable()) {
+          printError('AI not configured. Run: opentradex ai init <api-key>');
+          process.exit(1);
+        }
+        print('Thinking...\n');
+        const response = await ai.chat(message);
+        print(response.content);
+      } else {
+        print('Usage: opentradex ai <status|init|chat>');
+        print('');
+        print('  status         Check AI availability');
+        print('  init <key>     Initialize with API key');
+        print('  chat <msg>     Send a message to the AI');
+      }
+      break;
+    }
+
     // ============ VERSION ============
     case 'version':
     case '-v':
@@ -261,6 +334,14 @@ async function main(): Promise<void> {
 
 \x1b[1mRISK\x1b[0m
   opentradex risk                     Show risk state and positions
+
+\x1b[1mAI\x1b[0m
+  opentradex ai status                Check AI availability
+  opentradex ai init <api-key>        Initialize with Anthropic API key
+  opentradex ai chat <message>        Send a message to the AI
+
+\x1b[1mINTEGRATIONS\x1b[0m
+  opentradex mcp                      Start MCP server for Claude Code
 
 \x1b[1mCONFIG\x1b[0m
   opentradex config path              Show config directory

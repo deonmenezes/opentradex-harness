@@ -5,3 +5,14 @@ dist/
 .env.*
 .DS_Store
 .omc/
+
+# Local Claude Code settings
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Scratch scripts and screenshots
+tmp-*.ps1
+tmp-*.png
+
+# Electron-builder output
+packages/desktop/release/

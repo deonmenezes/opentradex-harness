@@ -61,14 +61,42 @@ export interface Market {
   volume: string;
 }
 
+export type FeedSource =
+  | 'reuters' | 'bloomberg' | 'ft' | 'wsj' | 'cnbc' | 'marketwatch'
+  | 'coindesk' | 'theblock' | 'benzinga' | 'seekingalpha'
+  | 'x' | 'reddit' | 'truth' | 'tiktok';
+
+export type FeedCategory = 'macro' | 'equities' | 'crypto' | 'forex' | 'prediction' | 'commodities' | 'social';
+
 export interface FeedItem {
   id: string;
-  source: 'reuters' | 'bloomberg' | 'ft' | 'x' | 'reddit' | 'truth' | 'tiktok';
+  source: FeedSource;
+  category?: FeedCategory;
   title: string;
   summary?: string;
+  url?: string;
   timestamp: number;
   age: string;
   sentiment?: 'bullish' | 'bearish' | 'neutral';
+  tickers?: string[];
+}
+
+export type ConnectorCategory = 'prediction' | 'equities' | 'crypto' | 'forex' | 'charts' | 'sportsbook';
+export type ConnectorStatus = 'connected' | 'disconnected' | 'available' | 'beta';
+
+export interface Connector {
+  id: string;
+  name: string;
+  tagline: string;
+  category: ConnectorCategory;
+  status: ConnectorStatus;
+  logo: {
+    mark: string;
+    bg: string;
+    fg: string;
+  };
+  capabilities: string[];
+  docsUrl?: string;
 }
 
 export interface Channel {

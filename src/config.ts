@@ -1,6 +1,6 @@
 /** Configuration management for OpenTradex */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
@@ -83,7 +83,7 @@ export function defaultConfig(): OpenTradexConfig {
       perTradePercent: 5,
       dailyDDKill: 10,
     },
-    model: 'claude-sonnet-4-6-20250514',
+    model: 'claude-sonnet-4-6',
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -219,10 +219,7 @@ export function writeAuditLog(entry: Record<string, unknown>): void {
   }) + '\n';
 
   try {
-    const fd = existsSync(file)
-      ? readFileSync(file, 'utf-8')
-      : '';
-    writeFileSync(file, fd + line);
+    appendFileSync(file, line);
   } catch {
     // Best effort logging
   }

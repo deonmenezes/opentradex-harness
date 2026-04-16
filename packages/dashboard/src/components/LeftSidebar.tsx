@@ -6,6 +6,8 @@ interface LeftSidebarProps {
   trades: Trade[];
   markets: Market[];
   onClose?: () => void;
+  onPositionAction?: (action: 'add' | 'reduce' | 'close', position: Position) => void;
+  onMarketSelect?: (market: Market) => void;
 }
 
 // Exchange icons/colors
@@ -17,7 +19,7 @@ const exchangeStyles: Record<string, { bg: string; text: string }> = {
   tradingview: { bg: 'bg-green-500/20', text: 'text-green-400' },
 };
 
-export default memo(function LeftSidebar({ positions, trades, markets, onClose }: LeftSidebarProps) {
+export default memo(function LeftSidebar({ positions, trades, markets, onClose, onPositionAction, onMarketSelect }: LeftSidebarProps) {
   const [positionSort, setPositionSort] = useState<'pnl' | 'size'>('pnl');
 
   // Memoized sorted positions
@@ -34,7 +36,7 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
   }), [positions]);
 
   return (
-    <aside className="w-80 lg:w-72 xl:w-80 h-full bg-surface border-r border-border flex flex-col overflow-hidden shrink-0">
+    <aside className="w-80 lg:w-full h-full bg-surface border-r border-border flex flex-col overflow-hidden shrink-0">
       {/* Mobile Header with Close */}
       <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface-2">
         <h2 className="font-semibold text-text">Trading</h2>
@@ -48,16 +50,14 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
         </button>
       </div>
 
-      {/* Positions - Enhanced */}
+      {/* Positions - Houston-style */}
       <section className="border-b border-border">
-        <div className="panel-header">
+        <div className="hs-section-header">
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-3.5 h-3.5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
-            <h2 className="text-sm font-semibold text-text uppercase tracking-wide">
-              Positions
-            </h2>
+            <h2 className="hs-section-label">Positions</h2>
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-xs font-semibold px-2 py-0.5 rounded ${totalPnL >= 0 ? 'bg-accent/20 text-accent' : 'bg-danger/20 text-danger'}`}>
@@ -91,7 +91,7 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
             return (
               <div
                 key={pos.id}
-                className="px-4 py-3 border-b border-border last:border-b-0 hover:bg-surface-2 cursor-pointer group transition-colors"
+                className="hs-row group"
               >
                 {/* Header Row */}
                 <div className="flex items-center justify-between mb-2">
@@ -100,11 +100,15 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
                       {pos.exchange.slice(0, 3).toUpperCase()}
                     </span>
                     <span className="font-semibold text-sm text-text">{pos.symbol}</span>
-                    <a href="#" className="text-text-dim hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/search?q=${encodeURIComponent(pos.symbol + ' ' + pos.exchange)}`, '_blank'); }}
+                      className="text-text-dim hover:text-accent opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Search market info"
+                    >
                       <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
-                    </a>
+                    </button>
                   </div>
                   <span className={`badge text-xs font-bold ${pos.side === 'yes' || pos.side === 'long' ? 'badge-yes' : 'badge-no'}`}>
                     {pos.side.toUpperCase()}
@@ -150,13 +154,22 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
 
                 {/* Quick Actions - Show on Hover */}
                 <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button className="text-2xs px-2 py-1 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onPositionAction?.('add', pos); }}
+                    className="text-2xs px-2 py-1 rounded bg-accent/20 text-accent hover:bg-accent/30 transition-colors"
+                  >
                     Add
                   </button>
-                  <button className="text-2xs px-2 py-1 rounded bg-warning/20 text-warning hover:bg-warning/30 transition-colors">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onPositionAction?.('reduce', pos); }}
+                    className="text-2xs px-2 py-1 rounded bg-warning/20 text-warning hover:bg-warning/30 transition-colors"
+                  >
                     Reduce
                   </button>
-                  <button className="text-2xs px-2 py-1 rounded bg-danger/20 text-danger hover:bg-danger/30 transition-colors">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onPositionAction?.('close', pos); }}
+                    className="text-2xs px-2 py-1 rounded bg-danger/20 text-danger hover:bg-danger/30 transition-colors"
+                  >
                     Close
                   </button>
                 </div>
@@ -171,26 +184,24 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
         </div>
       </section>
 
-      {/* Recent Trades - Enhanced */}
+      {/* Recent Trades - Houston-style */}
       <section className="border-b border-border">
-        <div className="panel-header">
+        <div className="hs-section-header">
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-3.5 h-3.5 text-warning" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
             </svg>
-            <h2 className="text-sm font-semibold text-text uppercase tracking-wide">
-              Recent Trades
-            </h2>
+            <h2 className="hs-section-label">Recent trades</h2>
           </div>
           <span className="text-xs text-text-dim">Last {trades.length}</span>
         </div>
         <div className="max-h-40 overflow-y-auto">
           {trades.map((trade) => {
-            const style = exchangeStyles[trade.exchange] || { bg: 'bg-gray-500/20', text: 'text-gray-400' };
+            // Exchange style available: exchangeStyles[trade.exchange]
             return (
               <div
                 key={trade.id}
-                className="px-4 py-2.5 flex items-center justify-between border-b border-border last:border-b-0 hover:bg-surface-2 transition-colors group"
+                className="hs-row flex items-center justify-between group"
               >
                 <div className="flex items-center gap-2">
                   {/* Status Icon */}
@@ -247,18 +258,16 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
         </div>
       </section>
 
-      {/* Markets - Enhanced */}
+      {/* Markets - Houston-style */}
       <section className="flex-1 flex flex-col overflow-hidden">
-        <div className="panel-header">
+        <div className="hs-section-header">
           <div className="flex items-center gap-2">
-            <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-3.5 h-3.5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
-            <h2 className="text-sm font-semibold text-text uppercase tracking-wide">
-              Market Scanner
-            </h2>
+            <h2 className="hs-section-label">Market scanner</h2>
           </div>
-          <span className="text-xs text-text-dim bg-surface-2 px-2 py-0.5 rounded">{markets.length}</span>
+          <span className="text-xs text-text-dim bg-surface-2 px-2 py-0.5 rounded-md">{markets.length}</span>
         </div>
         <div className="overflow-y-auto flex-1">
           {/* Table Header */}
@@ -274,7 +283,8 @@ export default memo(function LeftSidebar({ positions, trades, markets, onClose }
             return (
               <div
                 key={market.id}
-                className="px-4 py-2.5 grid grid-cols-4 gap-2 text-xs border-b border-border hover:bg-surface-2 cursor-pointer transition-colors group"
+                onClick={() => onMarketSelect?.(market)}
+                className="hs-row grid grid-cols-4 gap-2 text-xs group"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 mb-0.5">

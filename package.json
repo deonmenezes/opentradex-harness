@@ -70,7 +70,9 @@
   "workspaces": [
     "packages/*"
   ],
-  "dependencies": {},
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.89.0"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "typescript": "^5.4.0"

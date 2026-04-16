@@ -77,11 +77,18 @@ const mockMarkets: Market[] = [
 ];
 
 const mockFeed: FeedItem[] = [
-  { id: '1', source: 'reuters', title: 'Rates markets lean toward an earlier cut as Treasury yields cool', summary: 'Bond traders pushed yields lower after softer macro data...', timestamp: Date.now() - 14 * 60000, age: '14m' },
-  { id: '2', source: 'bloomberg', title: 'Bitcoin demand firms as ETF flows recover and volatility settles', timestamp: Date.now() - 28 * 60000, age: '28m' },
-  { id: '3', source: 'ft', title: 'Crude risk premium rises as traders assess fresh supply concerns', timestamp: Date.now() - 45 * 60000, age: '45m' },
-  { id: '4', source: 'x', title: '@zerohedge: Fed pivot incoming? Market pricing now shows 73% chance of September cut', timestamp: Date.now() - 52 * 60000, age: '52m' },
-  { id: '5', source: 'reddit', title: 'r/wallstreetbets: Massive call flow on SPY 550c expiring Friday', timestamp: Date.now() - 67 * 60000, age: '1h' },
+  { id: '1', source: 'reuters', category: 'macro', title: 'Rates markets lean toward an earlier cut as Treasury yields cool', summary: 'Bond traders pushed yields lower after softer macro data nudged expectations for the first cut into September.', timestamp: Date.now() - 14 * 60000, age: '14m', tickers: ['TLT', 'ZN'] },
+  { id: '2', source: 'bloomberg', category: 'crypto', title: 'Bitcoin demand firms as ETF flows recover and volatility settles', summary: 'IBIT and FBTC saw $312M of combined net inflows yesterday, the strongest day in three weeks.', timestamp: Date.now() - 28 * 60000, age: '28m', tickers: ['BTC', 'IBIT'] },
+  { id: '3', source: 'ft', category: 'commodities', title: 'Crude risk premium rises as traders assess fresh supply concerns', timestamp: Date.now() - 45 * 60000, age: '45m', tickers: ['CL', 'USO'] },
+  { id: '4', source: 'cnbc', category: 'equities', title: 'Nvidia leads chip rally as hyperscaler capex guidance surprises to the upside', summary: 'Microsoft and Meta both lifted FY26 capex targets, pointing to sustained AI infrastructure demand.', timestamp: Date.now() - 33 * 60000, age: '33m', tickers: ['NVDA', 'MSFT', 'META'] },
+  { id: '5', source: 'wsj', category: 'macro', title: 'Fed staff memo flags cooling labor market, tees up September pivot debate', timestamp: Date.now() - 48 * 60000, age: '48m', tickers: ['SPY', 'TLT'] },
+  { id: '6', source: 'marketwatch', category: 'equities', title: 'SPX closes at fresh high as breadth finally catches up to the mega-caps', timestamp: Date.now() - 55 * 60000, age: '55m', tickers: ['SPY', 'RSP'] },
+  { id: '7', source: 'coindesk', category: 'crypto', title: 'Ether options skew flips bullish ahead of the Pectra upgrade', timestamp: Date.now() - 62 * 60000, age: '1h', tickers: ['ETH'] },
+  { id: '8', source: 'theblock', category: 'crypto', title: 'Polymarket volume crosses $1.1B on US election week contracts', timestamp: Date.now() - 72 * 60000, age: '1h', tickers: ['POLY'] },
+  { id: '9', source: 'benzinga', category: 'equities', title: 'Unusual options flow: $18M of SPY Nov 600c hit the tape before the close', timestamp: Date.now() - 82 * 60000, age: '1h', tickers: ['SPY'] },
+  { id: '10', source: 'seekingalpha', category: 'forex', title: 'DXY slides to fresh 6-month low as carry trades unwind into BoJ meeting', timestamp: Date.now() - 95 * 60000, age: '2h', tickers: ['DXY', 'USDJPY'] },
+  { id: '11', source: 'x', category: 'social', title: '@zerohedge: Fed pivot incoming? Market pricing now shows 73% chance of September cut', timestamp: Date.now() - 52 * 60000, age: '52m' },
+  { id: '12', source: 'reddit', category: 'social', title: 'r/wallstreetbets: Massive call flow on SPY 550c expiring Friday', timestamp: Date.now() - 67 * 60000, age: '1h' },
 ];
 
 export function useHarness() {
@@ -95,6 +102,7 @@ export function useHarness() {
   const wsRef = useRef<WebSocket | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loopTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Handle real-time message
   const handleRealtimeMessage = useCallback((data: { type: string; payload: unknown }) => {
@@ -169,6 +177,11 @@ export function useHarness() {
             console.log('[WS] Connected');
             setConnectionType('ws');
             setStatus((prev) => ({ ...prev, connection: 'connected' }));
+            // If SSE fallback is open, close it now that WS is live
+            if (eventSourceRef.current) {
+              eventSourceRef.current.close();
+              eventSourceRef.current = null;
+            }
           }
         };
 
@@ -209,7 +222,7 @@ export function useHarness() {
         eventSourceRef.current = es;
 
         es.onopen = () => {
-          if (mounted && connectionType !== 'ws') {
+          if (mounted && !wsRef.current) {
             console.log('[SSE] Connected');
             setConnectionType('sse');
             setStatus((prev) => ({ ...prev, connection: 'connected' }));
@@ -227,7 +240,7 @@ export function useHarness() {
 
         es.onerror = () => {
           if (mounted) {
-            setStatus((prev) => ({ ...prev, connection: 'reconnecting' }));
+            setStatus((prev) => ({ ...prev, connection: 'connecting' }));
           }
         };
       } catch {
@@ -249,7 +262,7 @@ export function useHarness() {
       wsRef.current?.close();
       eventSourceRef.current?.close();
     };
-  }, [handleRealtimeMessage, connectionType]);
+  }, [handleRealtimeMessage]);
 
   // Send command to harness
   const sendCommand = useCallback(async (command: string): Promise<string> => {
@@ -289,16 +302,63 @@ export function useHarness() {
     }
   }, []);
 
-  // Toggle auto loop
-  const toggleAutoLoop = useCallback(() => {
-    setStatus((prev) => ({ ...prev, isAutoLoop: !prev.isAutoLoop }));
-  }, []);
-
   // Run single cycle
   const runCycle = useCallback(async () => {
-    setStatus((prev) => ({ ...prev, cycles: prev.cycles + 1 }));
-    await sendCommand('scan all markets and propose best trade');
+    try {
+      await fetch(`${API_BASE}/agent/scan`, { method: 'POST' });
+      setStatus((prev) => ({ ...prev, cycles: prev.cycles + 1 }));
+    } catch {
+      // Fallback to command if agent endpoint fails
+      setStatus((prev) => ({ ...prev, cycles: prev.cycles + 1 }));
+      await sendCommand('scan all markets and propose best trade');
+    }
   }, [sendCommand]);
+
+  // Set loop interval (0 = off, N = run every N minutes)
+  const setLoopInterval = useCallback(async (minutes: number) => {
+    if (loopTimerRef.current) {
+      clearInterval(loopTimerRef.current);
+      loopTimerRef.current = null;
+    }
+
+    const enabled = minutes > 0;
+    try {
+      await fetch(`${API_BASE}/agent/autoloop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, intervalMinutes: minutes }),
+      });
+    } catch {
+      // Non-fatal — client-side timer still runs
+    }
+
+    setStatus((prev) => ({ ...prev, isAutoLoop: enabled, cycleInterval: enabled ? minutes : prev.cycleInterval }));
+
+    if (enabled) {
+      loopTimerRef.current = setInterval(() => {
+        runCycle();
+      }, minutes * 60 * 1000);
+    }
+  }, [runCycle]);
+
+  // Back-compat toggle (used by TopBar.onToggleAutoLoop)
+  const toggleAutoLoop = useCallback(() => {
+    if (status.isAutoLoop) {
+      setLoopInterval(0);
+    } else {
+      setLoopInterval(status.cycleInterval || 5);
+    }
+  }, [status.isAutoLoop, status.cycleInterval, setLoopInterval]);
+
+  // Clean up loop timer on unmount
+  useEffect(() => {
+    return () => {
+      if (loopTimerRef.current) {
+        clearInterval(loopTimerRef.current);
+        loopTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Panic - emergency stop
   const panic = useCallback(async () => {
@@ -315,6 +375,7 @@ export function useHarness() {
     messages,
     sendCommand,
     toggleAutoLoop,
+    setLoopInterval,
     runCycle,
     panic,
   };

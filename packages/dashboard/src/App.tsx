@@ -1,15 +1,36 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import TopBar from './components/TopBar';
 import LeftSidebar from './components/LeftSidebar';
 import ChatCockpit from './components/ChatCockpit';
 import RightSidebar from './components/RightSidebar';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from './components/Resizable';
+import TradesPage from './pages/TradesPage';
+import MarketsPage from './pages/MarketsPage';
 import { useHarness } from './hooks/useHarness';
+import type { Position, Market, FeedItem, Connector } from './lib/types';
+
+type View = 'cockpit' | 'trades' | 'markets';
 
 export default function App() {
-  const { status, positions, trades, markets, feed, sendCommand, runCycle, toggleAutoLoop } = useHarness();
+  const { status, positions, trades, markets, feed, sendCommand, runCycle, toggleAutoLoop, setLoopInterval } = useHarness();
   const [selectedChannel, setSelectedChannel] = useState<string>('command');
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
+  const [view, setView] = useState<View>(() => {
+    const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '') : '';
+    return hash === 'trades' || hash === 'markets' ? (hash as View) : 'cockpit';
+  });
+
+  useEffect(() => {
+    const onHash = () => {
+      const h = window.location.hash.replace('#', '');
+      if (h === 'trades' || h === 'markets' || h === 'cockpit' || h === '') {
+        setView((h as View) || 'cockpit');
+      }
+    };
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const toggleLeftSidebar = useCallback(() => {
     setLeftSidebarOpen(prev => !prev);
@@ -21,6 +42,41 @@ export default function App() {
     setLeftSidebarOpen(false);
   }, []);
 
+  // Position action handler
+  const handlePositionAction = useCallback(async (action: 'add' | 'reduce' | 'close', position: Position) => {
+    const commands: Record<string, string> = {
+      add: `add to position ${position.symbol} on ${position.exchange}`,
+      reduce: `reduce position ${position.symbol} on ${position.exchange} by 50%`,
+      close: `close position ${position.symbol} on ${position.exchange}`,
+    };
+    await sendCommand(commands[action]);
+  }, [sendCommand]);
+
+  // Market selection handler
+  const handleMarketSelect = useCallback(async (market: Market) => {
+    await sendCommand(`analyze ${market.symbol} on ${market.exchange}`);
+  }, [sendCommand]);
+
+  // Connector action handler
+  const handleConnectorAction = useCallback(async (c: Connector) => {
+    if (c.status === 'connected') {
+      await sendCommand(`status for ${c.name} connector`);
+    } else {
+      await sendCommand(`connect to ${c.name}`);
+    }
+  }, [sendCommand]);
+
+  // Feed action handler
+  const handleFeedAction = useCallback(async (action: 'open' | 'save' | 'analyze', item: FeedItem) => {
+    if (action === 'analyze') {
+      await sendCommand(`analyze news: "${item.title}" from ${item.source}`);
+    } else if (action === 'save') {
+      console.log('Saved feed item:', item.title);
+      // In production, this would save to a watchlist or bookmarks
+    }
+    // 'open' is handled in the component itself by opening the URL
+  }, [sendCommand]);
+
   return (
     <div className="h-screen w-screen flex flex-col bg-bg overflow-hidden">
       {/* Top Bar */}
@@ -28,11 +84,28 @@ export default function App() {
         status={status}
         onRunCycle={runCycle}
         onToggleAutoLoop={toggleAutoLoop}
+        onSetLoopInterval={setLoopInterval}
         onToggleLeftSidebar={toggleLeftSidebar}
         onToggleRightSidebar={toggleRightSidebar}
+        onShowTrades={() => setView('trades')}
+        onShowMarkets={() => setView('markets')}
       />
 
+      {view === 'trades' && (
+        <TradesPage trades={trades} onBack={() => setView('cockpit')} />
+      )}
+
+      {view === 'markets' && (
+        <MarketsPage
+          markets={markets}
+          onBack={() => setView('cockpit')}
+          onSelectMarket={(m) => { handleMarketSelect(m); setView('cockpit'); }}
+          onConnectorAction={handleConnectorAction}
+        />
+      )}
+
       {/* Main Content */}
+      {view === 'cockpit' && (
       <div className="flex-1 flex overflow-hidden relative">
         {/* Mobile Overlay */}
         {(leftSidebarOpen || rightSidebarOpen) && (
@@ -42,44 +115,71 @@ export default function App() {
           />
         )}
 
-        {/* Left Sidebar - Positions, Trades, Markets */}
-        <div className={`
-          ${leftSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:relative
-          fixed left-0 top-0 h-full z-30
-          transition-transform duration-300 ease-in-out
-          lg:block
-        `}>
-          <LeftSidebar
-            positions={positions}
-            trades={trades}
-            markets={markets}
-            onClose={() => setLeftSidebarOpen(false)}
+        {/* Mobile: drawer layout */}
+        <div className="flex-1 flex overflow-hidden lg:hidden">
+          <div className={`
+            ${leftSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+            fixed left-0 top-0 h-full z-30
+            transition-transform duration-300 ease-in-out
+          `}>
+            <LeftSidebar
+              positions={positions}
+              trades={trades}
+              markets={markets}
+              onClose={() => setLeftSidebarOpen(false)}
+              onPositionAction={handlePositionAction}
+              onMarketSelect={handleMarketSelect}
+            />
+          </div>
+          <ChatCockpit
+            selectedChannel={selectedChannel}
+            onChannelChange={setSelectedChannel}
+            onCommand={sendCommand}
+            status={status}
           />
+          <div className={`
+            ${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+            fixed right-0 top-0 h-full z-30
+            transition-transform duration-300 ease-in-out
+          `}>
+            <RightSidebar
+              feed={feed}
+              onClose={() => setRightSidebarOpen(false)}
+              onFeedAction={handleFeedAction}
+            />
+          </div>
         </div>
 
-        {/* Center - Chat Cockpit */}
-        <ChatCockpit
-          selectedChannel={selectedChannel}
-          onChannelChange={setSelectedChannel}
-          onCommand={sendCommand}
-          status={status}
-        />
-
-        {/* Right Sidebar - Feed */}
-        <div className={`
-          ${rightSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
-          lg:translate-x-0 lg:relative
-          fixed right-0 top-0 h-full z-30
-          transition-transform duration-300 ease-in-out
-          lg:block
-        `}>
-          <RightSidebar
-            feed={feed}
-            onClose={() => setRightSidebarOpen(false)}
-          />
-        </div>
+        {/* Desktop: resizable 3-pane layout */}
+        <ResizablePanelGroup orientation="horizontal" className="hidden lg:flex flex-1">
+          <ResizablePanel defaultSize="22%" minSize="15%" maxSize="40%">
+            <LeftSidebar
+              positions={positions}
+              trades={trades}
+              markets={markets}
+              onPositionAction={handlePositionAction}
+              onMarketSelect={handleMarketSelect}
+            />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize="56%" minSize="30%">
+            <ChatCockpit
+              selectedChannel={selectedChannel}
+              onChannelChange={setSelectedChannel}
+              onCommand={sendCommand}
+              status={status}
+            />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize="22%" minSize="15%" maxSize="40%">
+            <RightSidebar
+              feed={feed}
+              onFeedAction={handleFeedAction}
+            />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
+      )}
     </div>
   );
 }

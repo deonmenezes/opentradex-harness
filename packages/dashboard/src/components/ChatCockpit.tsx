@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, memo } from 'react';
 import type { HarnessStatus } from '../lib/types';
 
 interface ChatCockpitProps {
@@ -27,7 +27,7 @@ const missionCards = [
   { id: '3', title: 'TRADINGVIEW PASS', description: 'Use the TradingView lane and focus on this watchlist: SPY, QQQ, BTCUSD, NQ1!. Tell me which symbols or macro instruments deserve attention.' },
 ];
 
-export default memo(function ChatCockpit({ selectedChannel, onChannelChange, onCommand, status }: ChatCockpitProps) {
+export default memo(function ChatCockpit({ selectedChannel, onChannelChange, onCommand, status: _status }: ChatCockpitProps) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -76,91 +76,62 @@ export default memo(function ChatCockpit({ selectedChannel, onChannelChange, onC
 
   return (
     <main className="flex-1 flex overflow-hidden">
-      {/* Channels Sidebar - Hidden on mobile */}
-      <div className="hidden md:flex w-48 lg:w-56 xl:w-64 bg-surface border-r border-border flex-col shrink-0">
-        <div className="p-4 border-b border-border">
-          <h2 className="text-xs font-semibold text-accent uppercase tracking-widest mb-2">
-            Messaging Channels
-          </h2>
-          <p className="text-xs text-text-dim">
-            Route prompts by desk so the assistant knows whether you want markets, feeds, risk, execution, or TradingView context.
-          </p>
-        </div>
-        <div className="flex-1 overflow-y-auto p-2">
-          {channels.map((channel) => (
-            <button
-              key={channel.id}
-              onClick={() => onChannelChange(channel.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-colors ${
-                selectedChannel === channel.id
-                  ? 'bg-surface-2 border border-border'
-                  : 'hover:bg-surface-2'
-              }`}
-            >
-              <svg className="w-4 h-4 text-text-dim" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={channel.icon} />
-              </svg>
-              <span className="text-sm flex-1 text-left">{channel.name}</span>
-              <span className="text-xs text-text-dim bg-surface-2 px-1.5 py-0.5 rounded">
-                {channel.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Chat Area */}
       <div className="flex-1 flex flex-col bg-bg overflow-hidden">
-        {/* Chat Header */}
-        <div className="h-12 px-4 flex items-center border-b border-border bg-surface">
-          <span className="text-xs font-semibold text-danger uppercase tracking-widest">
-            Chat Cockpit
-          </span>
-          <span className="mx-3 text-text-dim">/</span>
-          <span className="text-sm text-text-dim">Direct the harness and launch missions.</span>
+        {/* Chat Header with inline channel pills */}
+        <div className="px-4 py-2.5 flex items-center gap-3 border-b border-border bg-surface">
+          <span className="text-xs font-medium text-text-dim">Chat</span>
+          <div className="flex items-center gap-1">
+            {channels.map((channel) => (
+              <button
+                key={channel.id}
+                onClick={() => onChannelChange(channel.id)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors ${
+                  selectedChannel === channel.id
+                    ? 'bg-surface-2 text-text'
+                    : 'text-text-dim hover:bg-surface-2 hover:text-text'
+                }`}
+              >
+                <span>{channel.name.toLowerCase().replace('all channels', 'all')}</span>
+                {channel.count > 0 && (
+                  <span className="text-2xs text-text-dim">{channel.count}</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center">
-              {/* Status Badge */}
-              <div className="mb-6 px-4 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm">
-                TRADINGVIEW MCP READY
-              </div>
+            <div className="h-full flex flex-col items-center justify-center px-4">
+              <div className="w-full max-w-xl flex flex-col items-center">
+                {/* Title */}
+                <h1 className="text-2xl md:text-3xl font-semibold text-text tracking-tight text-center">
+                  What should we trade next?
+                </h1>
+                <p className="mt-2 text-sm text-text-dim text-center">
+                  Direct the harness. Paper-only by default.
+                </p>
 
-              {/* Mission Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 max-w-3xl px-4 md:px-0">
-                {missionCards.map((card) => (
-                  <button
-                    key={card.id}
-                    onClick={() => handleMissionClick(card.description)}
-                    className="p-4 rounded-lg bg-surface border border-border hover:border-accent hover:bg-surface-2 transition-all text-left group"
-                  >
-                    <h3 className="text-xs font-semibold text-text-dim uppercase tracking-wide mb-2 group-hover:text-accent">
-                      {card.title}
-                    </h3>
-                    <p className="text-xs text-text-dim line-clamp-4">
-                      {card.description}
-                    </p>
-                  </button>
-                ))}
-              </div>
-
-              {/* Quick Actions */}
-              <div className="mt-6 flex gap-3">
-                <button
-                  onClick={() => handleMissionClick('Audit the workspace and tell me what is missing.')}
-                  className="px-4 py-2 rounded-lg bg-surface-2 border border-border text-sm hover:bg-card-hover hover:border-accent transition-colors"
-                >
-                  Audit the workspace and tell me what is missing.
-                </button>
-                <button
-                  onClick={() => handleMissionClick('Warm boot the harness and propose the best paper trade.')}
-                  className="px-4 py-2 rounded-lg bg-surface-2 border border-border text-sm hover:bg-card-hover hover:border-accent transition-colors"
-                >
-                  Warm boot the harness and propose the best paper trade.
-                </button>
+                {/* Suggestion pills */}
+                <div className="mt-8 w-full flex flex-col gap-2">
+                  {missionCards.map((card) => (
+                    <button
+                      key={card.id}
+                      onClick={() => handleMissionClick(card.description)}
+                      className="w-full text-left px-4 py-3 rounded-lg bg-surface hover:bg-surface-2 border border-border hover:border-border/80 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <svg className="w-3.5 h-3.5 text-text-dim group-hover:text-accent transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        <span className="text-sm font-medium text-text">{card.title.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())}</span>
+                      </div>
+                      <p className="text-xs text-text-dim line-clamp-2 pl-5">{card.description}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ) : (
@@ -197,26 +168,26 @@ export default memo(function ChatCockpit({ selectedChannel, onChannelChange, onC
           )}
         </div>
 
-        {/* Input Area */}
-        <form onSubmit={handleSubmit} className="p-4 border-t border-border bg-surface">
-          <div className="flex items-center gap-3">
-            <div className="px-3 py-1.5 rounded bg-accent/20 text-accent text-xs font-medium">
-              COMMAND
-            </div>
+        {/* Input Area — Houston-style single field */}
+        <form onSubmit={handleSubmit} className="px-4 py-3 border-t border-border bg-surface">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-input-bg border border-border focus-within:border-accent/60 transition-colors">
+            <span className="text-2xs text-text-dim uppercase tracking-wide shrink-0">{selectedChannel}</span>
+            <span className="text-text-dim shrink-0">·</span>
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask the harness what to scan, compare, explain, or trade"
-              className="flex-1 px-4 py-2.5 rounded-lg bg-input-bg border border-border text-sm focus:border-accent focus:outline-none"
+              className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-text-dim/60"
               disabled={isLoading}
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="p-2.5 rounded-lg bg-accent text-bg hover:bg-accent-dim disabled:opacity-50 disabled:cursor-not-allowed"
+              className="shrink-0 p-1.5 rounded-md text-text-dim hover:text-accent hover:bg-accent/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              aria-label="Send"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
             </button>

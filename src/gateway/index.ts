@@ -8,6 +8,8 @@ import { createHash } from 'node:crypto';
 import { OpenTradex } from '../index.js';
 import { loadConfig, verifyAuthToken, getModeBadge, readModeLock } from '../config.js';
 import { getRiskState, panicFlatten, isTradingHalted, checkRisk } from '../risk.js';
+import { getAgent, AgentConfig } from '../agent/index.js';
+import { getAI, initializeAI } from '../ai/index.js';
 import type { Exchange } from '../types.js';
 
 // Get the directory of this file to find the dashboard
@@ -55,8 +57,10 @@ function encodeWebSocketFrame(data: string): Buffer {
   return Buffer.concat([header, payload]);
 }
 
-// Decode WebSocket frame
-function decodeWebSocketFrame(buffer: Buffer): { opcode: number; payload: string } | null {
+// Decode WebSocket frame and report how many bytes were consumed
+function decodeWebSocketFrameWithSize(
+  buffer: Buffer
+): { frame: { opcode: number; payload: string }; consumed: number } | null {
   if (buffer.length < 2) return null;
 
   const firstByte = buffer[0];
@@ -93,7 +97,10 @@ function decodeWebSocketFrame(buffer: Buffer): { opcode: number; payload: string
     }
   }
 
-  return { opcode, payload: payload.toString('utf8') };
+  return {
+    frame: { opcode, payload: payload.toString('utf8') },
+    consumed: offset + payloadLength,
+  };
 }
 
 // Broadcast event to all SSE and WebSocket clients
@@ -244,7 +251,9 @@ export function createGateway(harness: OpenTradex, config: GatewayConfig = {}) {
     }
 
     // Auth check for API routes (skip for static files and health)
-    const isApiRoute = path.startsWith('/api/') || ['/scan', '/search', '/quote', '/orderbook', '/risk', '/command', '/panic', '/config', '/events'].includes(path);
+    const protectedPrefixes = ['/api/', '/agent/', '/ai/'];
+    const protectedExact = ['/scan', '/search', '/quote', '/orderbook', '/risk', '/risk/check', '/command', '/panic', '/config', '/events', '/agent', '/ai'];
+    const isApiRoute = protectedPrefixes.some((p) => path.startsWith(p)) || protectedExact.includes(path);
     if (isApiRoute && path !== '/api/health' && !checkAuth(req, requireAuth)) {
       return error(res, 'Unauthorized', 401);
     }
@@ -382,28 +391,52 @@ export function createGateway(harness: OpenTradex, config: GatewayConfig = {}) {
         return json(res, result);
       }
 
-      // Command
+      // Command - AI-powered
       if ((path === '/command' || path === '/api/command') && req.method === 'POST') {
         const body = await readBody(req);
         const { command } = JSON.parse(body);
 
-        let response: string;
+        let response = '';
+        let aiUsed = false;
 
-        if (command.toLowerCase().includes('scan')) {
-          const markets = await harness.scanAll(5);
-          response = `Found ${markets.length} markets:\n${markets.map((m) => `- ${m.exchange}: ${m.symbol} @ ${m.price}`).join('\n')}`;
-        } else if (command.toLowerCase().includes('risk')) {
-          const state = getRiskState();
-          response = `Risk State:\n- Daily P&L: $${state.dailyPnL.toFixed(2)}\n- Open Positions: ${state.openPositions.length}\n- Trades Today: ${state.dailyTrades}`;
-        } else if (command.toLowerCase().includes('status')) {
-          const mode = readModeLock();
-          response = `Status: ${mode || 'not configured'}\nExchanges: ${harness.exchanges.join(', ')}`;
-        } else {
-          response = `Command received: "${command}"\n\nIn production, this would be processed by the AI agent. For now, try:\n- "scan markets"\n- "risk status"\n- "show status"`;
+        // Try AI first if available
+        const ai = getAI();
+        if (ai.isAvailable()) {
+          try {
+            // Enhance command with live market data for certain queries
+            let enhancedCommand = command;
+            if (command.toLowerCase().includes('scan') || command.toLowerCase().includes('market')) {
+              const markets = await harness.scanAll(5);
+              enhancedCommand = `${command}\n\nCurrent Market Data:\n${markets.map((m) => `- ${m.exchange}: ${m.symbol} @ $${m.price}`).join('\n')}`;
+            }
+
+            const aiResponse = await ai.chat(enhancedCommand);
+            response = aiResponse.content;
+            aiUsed = true;
+          } catch (err) {
+            console.error('[AI] Command error:', err);
+            // Fall back to basic handling
+          }
         }
 
-        broadcast('command', { command, response });
-        return json(res, { command, response });
+        // Fallback to basic command handling if AI not available
+        if (!aiUsed) {
+          if (command.toLowerCase().includes('scan')) {
+            const markets = await harness.scanAll(5);
+            response = `Found ${markets.length} markets:\n${markets.map((m) => `- ${m.exchange}: ${m.symbol} @ ${m.price}`).join('\n')}`;
+          } else if (command.toLowerCase().includes('risk')) {
+            const state = getRiskState();
+            response = `Risk State:\n- Daily P&L: $${state.dailyPnL.toFixed(2)}\n- Open Positions: ${state.openPositions.length}\n- Trades Today: ${state.dailyTrades}`;
+          } else if (command.toLowerCase().includes('status')) {
+            const mode = readModeLock();
+            response = `Status: ${mode || 'not configured'}\nExchanges: ${harness.exchanges.join(', ')}`;
+          } else {
+            response = `Command received: "${command}"\n\nAI not configured. Run \`npx opentradex onboard\` to enable AI features.\n\nBasic commands available:\n- "scan markets"\n- "risk status"\n- "show status"`;
+          }
+        }
+
+        broadcast('command', { command, response, aiUsed });
+        return json(res, { command, response, aiUsed });
       }
 
       // Panic
@@ -430,6 +463,146 @@ export function createGateway(harness: OpenTradex, config: GatewayConfig = {}) {
             }
           : null;
         return json(res, safeConfig);
+      }
+
+      // ============ AI AGENT ROUTES ============
+
+      // Agent Status
+      if (path === '/agent' || path === '/api/agent' || path === '/agent/status' || path === '/api/agent/status') {
+        const agent = getAgent();
+        return json(res, {
+          status: agent.getStatus(),
+          config: agent.getConfig(),
+        });
+      }
+
+      // Start Agent
+      if ((path === '/agent/start' || path === '/api/agent/start') && req.method === 'POST') {
+        const body = await readBody(req);
+        const config = body ? JSON.parse(body) : {};
+        const agent = getAgent(config as Partial<AgentConfig>);
+
+        await agent.start();
+        broadcast('agent', { event: 'started', status: agent.getStatus() });
+
+        return json(res, { message: 'Agent started', status: agent.getStatus() });
+      }
+
+      // Stop Agent
+      if ((path === '/agent/stop' || path === '/api/agent/stop') && req.method === 'POST') {
+        const agent = getAgent();
+        agent.stop();
+        broadcast('agent', { event: 'stopped', status: agent.getStatus() });
+
+        return json(res, { message: 'Agent stopped', status: agent.getStatus() });
+      }
+
+      // Trigger Manual Scan
+      if ((path === '/agent/scan' || path === '/api/agent/scan') && req.method === 'POST') {
+        const agent = getAgent();
+        const results = await agent.triggerScan();
+        broadcast('agent', { event: 'scan-complete', results });
+
+        return json(res, { count: results.length, results });
+      }
+
+      // Update Agent Config
+      if ((path === '/agent/config' || path === '/api/agent/config') && req.method === 'POST') {
+        const body = await readBody(req);
+        const updates = JSON.parse(body);
+        const agent = getAgent();
+        agent.updateConfig(updates);
+
+        return json(res, { message: 'Config updated', config: agent.getConfig() });
+      }
+
+      // Toggle Auto-Loop
+      if ((path === '/agent/autoloop' || path === '/api/agent/autoloop') && req.method === 'POST') {
+        const body = await readBody(req);
+        const { enabled } = JSON.parse(body);
+        const agent = getAgent();
+        agent.setAutoLoop(enabled);
+        broadcast('agent', { event: 'autoloop', enabled, status: agent.getStatus() });
+
+        return json(res, { message: `Auto-loop ${enabled ? 'enabled' : 'disabled'}`, status: agent.getStatus() });
+      }
+
+      // ============ AI ROUTES ============
+
+      // AI Status
+      if (path === '/ai' || path === '/api/ai' || path === '/ai/status' || path === '/api/ai/status') {
+        const ai = getAI();
+        return json(res, {
+          available: ai.isAvailable(),
+          config: ai.getConfig(),
+        });
+      }
+
+      // Initialize AI with API key
+      if ((path === '/ai/init' || path === '/api/ai/init') && req.method === 'POST') {
+        const body = await readBody(req);
+        const { apiKey } = JSON.parse(body);
+        const success = initializeAI(apiKey);
+        return json(res, { success, message: success ? 'AI initialized' : 'Failed to initialize AI' });
+      }
+
+      // AI providers — list all registered backends with configured/active status
+      if (path === '/ai/providers' || path === '/api/ai/providers') {
+        const ai = getAI();
+        return json(res, { providers: ai.providerStatus() });
+      }
+
+      // AI Chat (direct) — accepts optional provider/model/role routing
+      if ((path === '/ai/chat' || path === '/api/ai/chat') && req.method === 'POST') {
+        const body = await readBody(req);
+        const { message, includeContext, provider, model, role } = JSON.parse(body);
+        const ai = getAI();
+
+        if (!ai.isAvailable()) {
+          return json(res, { error: 'AI not configured. Set any provider key (ANTHROPIC_API_KEY / OPENAI_API_KEY / OPENROUTER_API_KEY / GOOGLE_API_KEY / GROQ_API_KEY / KIMI_API_KEY / DEEPSEEK_API_KEY) or install Claude Code CLI.' }, 400);
+        }
+
+        const response = await ai.chat(message, {
+          includeContext: includeContext !== false,
+          provider,
+          model,
+          role,
+        });
+        return json(res, response);
+      }
+
+      // AI Analyze Market
+      if ((path === '/ai/analyze' || path === '/api/ai/analyze') && req.method === 'POST') {
+        const body = await readBody(req);
+        const { symbol, exchange } = JSON.parse(body);
+        const ai = getAI();
+
+        if (!ai.isAvailable()) {
+          return json(res, { error: 'AI not configured' }, 400);
+        }
+
+        // Get market data if available
+        let marketData;
+        try {
+          marketData = await harness.exchange(exchange as Exchange).quote(symbol);
+        } catch {
+          // Continue without market data
+        }
+
+        const response = await ai.analyzeMarket(symbol, exchange, marketData);
+        return json(res, response);
+      }
+
+      // AI Risk Explanation
+      if (path === '/ai/risk' || path === '/api/ai/risk') {
+        const ai = getAI();
+
+        if (!ai.isAvailable()) {
+          return json(res, { error: 'AI not configured' }, 400);
+        }
+
+        const response = await ai.explainRisk();
+        return json(res, response);
       }
 
       // ============ DASHBOARD UI ============
@@ -572,44 +745,43 @@ POST /api/panic       Emergency stop
     socket.on('data', (data: Buffer) => {
       buffer = Buffer.concat([buffer, data]);
 
-      const frame = decodeWebSocketFrame(buffer);
-      if (!frame) return;
+      // Drain as many complete frames as are buffered
+      while (true) {
+        const parsed = decodeWebSocketFrameWithSize(buffer);
+        if (!parsed) return;
 
-      buffer = Buffer.alloc(0); // Clear buffer after processing
+        const { frame, consumed } = parsed;
+        buffer = buffer.subarray(consumed);
 
-      // Handle different opcodes
-      if (frame.opcode === 0x08) {
-        // Close frame
-        wsClients.delete(client);
-        socket.end();
-        return;
-      }
+        if (frame.opcode === 0x08) {
+          wsClients.delete(client);
+          socket.end();
+          return;
+        }
 
-      if (frame.opcode === 0x09) {
-        // Ping - respond with pong
-        const pong = Buffer.alloc(2);
-        pong[0] = 0x8a; // Pong frame
-        pong[1] = 0x00;
-        socket.write(pong);
-        return;
-      }
+        if (frame.opcode === 0x09) {
+          const pong = Buffer.alloc(2);
+          pong[0] = 0x8a;
+          pong[1] = 0x00;
+          socket.write(pong);
+          continue;
+        }
 
-      if (frame.opcode === 0x0a) {
-        // Pong - mark client as alive
-        client.isAlive = true;
-        return;
-      }
+        if (frame.opcode === 0x0a) {
+          client.isAlive = true;
+          continue;
+        }
 
-      // Text frame - handle message
-      if (frame.opcode === 0x01) {
-        try {
-          const msg = JSON.parse(frame.payload);
-          if (msg.type === 'ping') {
-            const response = encodeWebSocketFrame(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-            socket.write(response);
+        if (frame.opcode === 0x01) {
+          try {
+            const msg = JSON.parse(frame.payload);
+            if (msg.type === 'ping') {
+              const response = encodeWebSocketFrame(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+              socket.write(response);
+            }
+          } catch {
+            // Ignore invalid JSON
           }
-        } catch {
-          // Ignore invalid JSON
         }
       }
     });

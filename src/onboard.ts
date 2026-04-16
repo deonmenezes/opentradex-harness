@@ -251,13 +251,125 @@ export async function runOnboard(paperOnly = false): Promise<void> {
   config.model = await selectOption(
     'Select default AI model for the Think loop:',
     [
-      { value: 'claude-sonnet-4-6-20250514', label: 'Claude Sonnet 4.6 (recommended)' },
-      { value: 'claude-opus-4-5-20251101', label: 'Claude Opus 4.5 (most capable)' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (recommended)' },
+      { value: 'claude-opus-4-7', label: 'Claude Opus 4.7 (most capable)' },
       { value: 'gpt-4o', label: 'GPT-4o' },
       { value: 'local', label: 'Local model (via Ollama)' },
     ],
-    'claude-sonnet-4-6-20250514'
+    'claude-sonnet-4-6'
   );
+
+  // Step 6: AI API Key
+  header('Step 6: AI Integration');
+
+  print('Connect your AI for intelligent trading assistance.\n');
+  print('The AI can:');
+  print('  - Analyze markets and suggest trades');
+  print('  - Explain risk and portfolio state');
+  print('  - Process natural language commands');
+  print('  - Provide reasoning for decisions\n');
+
+  const configureAI = await askYesNo('Configure Claude AI now?', true);
+
+  if (configureAI) {
+    print('\nGet your API key from: https://console.anthropic.com/settings/keys\n');
+
+    const apiKey = await ask('Anthropic API Key (or press Enter to skip): ');
+
+    if (apiKey) {
+      // Save to environment file
+      const { writeFileSync, existsSync, readFileSync } = await import('node:fs');
+      const { join } = await import('node:path');
+      const envPath = join(CONFIG_DIR, '.env');
+
+      let envContent = '';
+      if (existsSync(envPath)) {
+        envContent = readFileSync(envPath, 'utf-8');
+        // Remove existing ANTHROPIC_API_KEY if present
+        envContent = envContent.replace(/^ANTHROPIC_API_KEY=.*$/m, '').trim();
+      }
+
+      envContent = envContent ? `${envContent}\nANTHROPIC_API_KEY=${apiKey}` : `ANTHROPIC_API_KEY=${apiKey}`;
+      writeFileSync(envPath, envContent + '\n', { mode: 0o600 });
+
+      print('\nAPI key saved to ' + envPath);
+      print('AI features will be available when you start the gateway.\n');
+
+      // Also store in config (encrypted reference)
+      (config as any).ai = {
+        provider: 'anthropic',
+        model: config.model,
+        configured: true,
+      };
+    } else {
+      print('\nSkipped. You can set ANTHROPIC_API_KEY environment variable later.');
+      print('Or run: npx opentradex onboard\n');
+    }
+  }
+
+  // Step 7: Claude Code MCP Integration
+  header('Step 7: Claude Code Integration (Optional)');
+
+  print('Connect OpenTradex as an MCP server for Claude Code CLI.\n');
+  print('This allows Claude Code to:');
+  print('  - Scan markets directly from your IDE');
+  print('  - Execute trades via natural language');
+  print('  - Monitor your portfolio in real-time\n');
+
+  const setupMCP = await askYesNo('Set up Claude Code MCP integration?', false);
+
+  if (setupMCP) {
+    const { writeFileSync, existsSync, readFileSync, mkdirSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const { homedir } = await import('node:os');
+
+    // Create MCP server config
+    const mcpConfig = {
+      mcpServers: {
+        opentradex: {
+          command: 'npx',
+          args: ['opentradex', 'mcp'],
+          env: {
+            OPENTRADEX_PORT: String(config.port),
+          },
+        },
+      },
+    };
+
+    // Claude Code config location
+    const claudeDir = join(homedir(), '.claude');
+    if (!existsSync(claudeDir)) {
+      mkdirSync(claudeDir, { recursive: true });
+    }
+
+    const mcpPath = join(claudeDir, 'claude_desktop_config.json');
+    let existingConfig: any = {};
+
+    if (existsSync(mcpPath)) {
+      try {
+        existingConfig = JSON.parse(readFileSync(mcpPath, 'utf-8'));
+      } catch {
+        // Start fresh
+      }
+    }
+
+    // Merge MCP server config
+    existingConfig.mcpServers = {
+      ...existingConfig.mcpServers,
+      ...mcpConfig.mcpServers,
+    };
+
+    writeFileSync(mcpPath, JSON.stringify(existingConfig, null, 2));
+
+    print('\nMCP configuration added to: ' + mcpPath);
+    print('Restart Claude Code to activate the OpenTradex tools.\n');
+    print('Available MCP tools:');
+    print('  - opentradex_scan: Scan markets');
+    print('  - opentradex_quote: Get price quotes');
+    print('  - opentradex_trade: Execute trades');
+    print('  - opentradex_portfolio: View positions');
+    print('  - opentradex_risk: Check risk state\n');
+  }
 
   // Save configuration
   saveConfig(config);

@@ -3,6 +3,7 @@ import type { FeedItem } from '../lib/types';
 
 interface RightSidebarProps {
   feed: FeedItem[];
+  onClose?: () => void;
 }
 
 const sourceIcons: Record<string, { icon: string; color: string; fullName: string }> = {
@@ -21,7 +22,7 @@ const feedTabs = [
   { id: 'social', label: 'Social', icon: 'M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z' },
 ];
 
-export default memo(function RightSidebar({ feed }: RightSidebarProps) {
+export default memo(function RightSidebar({ feed, onClose }: RightSidebarProps) {
   const [activeTab, setActiveTab] = useState('all');
   const [readItems, setReadItems] = useState<Set<string>>(new Set());
 
@@ -42,9 +43,22 @@ export default memo(function RightSidebar({ feed }: RightSidebarProps) {
   }, []);
 
   return (
-    <aside className="w-80 bg-surface border-l border-border flex flex-col overflow-hidden shrink-0">
+    <aside className="w-80 lg:w-72 xl:w-80 h-full bg-surface border-l border-border flex flex-col overflow-hidden shrink-0">
+      {/* Mobile Header with Close */}
+      <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface-2">
+        <h2 className="font-semibold text-text">Live Feed</h2>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-card-hover text-text-dim hover:text-text transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
       {/* Header - Enhanced */}
-      <div className="panel-header">
+      <div className="panel-header hidden lg:flex">
         <div className="flex items-center gap-2">
           <svg className="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />

@@ -5,6 +5,7 @@ interface LeftSidebarProps {
   positions: Position[];
   trades: Trade[];
   markets: Market[];
+  onClose?: () => void;
 }
 
 // Exchange icons/colors
@@ -16,7 +17,7 @@ const exchangeStyles: Record<string, { bg: string; text: string }> = {
   tradingview: { bg: 'bg-green-500/20', text: 'text-green-400' },
 };
 
-export default memo(function LeftSidebar({ positions, trades, markets }: LeftSidebarProps) {
+export default memo(function LeftSidebar({ positions, trades, markets, onClose }: LeftSidebarProps) {
   const [positionSort, setPositionSort] = useState<'pnl' | 'size'>('pnl');
 
   // Memoized sorted positions
@@ -28,13 +29,25 @@ export default memo(function LeftSidebar({ positions, trades, markets }: LeftSid
   }, [positions, positionSort]);
 
   // Memoized totals
-  const { totalPnL, totalValue } = useMemo(() => ({
+  const { totalPnL } = useMemo(() => ({
     totalPnL: positions.reduce((sum, p) => sum + p.pnl, 0),
-    totalValue: positions.reduce((sum, p) => sum + (p.size * p.currentPrice), 0),
   }), [positions]);
 
   return (
-    <aside className="w-80 bg-surface border-r border-border flex flex-col overflow-hidden shrink-0">
+    <aside className="w-80 lg:w-72 xl:w-80 h-full bg-surface border-r border-border flex flex-col overflow-hidden shrink-0">
+      {/* Mobile Header with Close */}
+      <div className="lg:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-surface-2">
+        <h2 className="font-semibold text-text">Trading</h2>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-lg hover:bg-card-hover text-text-dim hover:text-text transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
       {/* Positions - Enhanced */}
       <section className="border-b border-border">
         <div className="panel-header">

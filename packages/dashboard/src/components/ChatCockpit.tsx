@@ -76,8 +76,8 @@ export default memo(function ChatCockpit({ selectedChannel, onChannelChange, onC
 
   return (
     <main className="flex-1 flex overflow-hidden">
-      {/* Channels Sidebar */}
-      <div className="w-64 bg-surface border-r border-border flex flex-col shrink-0">
+      {/* Channels Sidebar - Hidden on mobile */}
+      <div className="hidden md:flex w-48 lg:w-56 xl:w-64 bg-surface border-r border-border flex-col shrink-0">
         <div className="p-4 border-b border-border">
           <h2 className="text-xs font-semibold text-accent uppercase tracking-widest mb-2">
             Messaging Channels
@@ -130,7 +130,7 @@ export default memo(function ChatCockpit({ selectedChannel, onChannelChange, onC
               </div>
 
               {/* Mission Cards */}
-              <div className="grid grid-cols-3 gap-4 max-w-3xl">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 max-w-3xl px-4 md:px-0">
                 {missionCards.map((card) => (
                   <button
                     key={card.id}

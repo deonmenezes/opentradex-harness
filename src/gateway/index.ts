@@ -16,6 +16,7 @@ import { addressFromKey, generatePrivateKey, isPaymentsActive, loadX402Settings,
 import type { Exchange } from '../types.js';
 import { getScraperService } from '../scraper/service.js';
 import { getMemory } from '../ai/memory.js';
+import { routeIntent } from '../ai/intents.js';
 
 // Get the directory of this file to find the dashboard
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -459,19 +460,29 @@ export function createGateway(harness: OpenTradex, config: GatewayConfig = {}) {
         return json(res, result);
       }
 
-      // Command - AI-powered
+      // Command - AI-powered with intent routing to agent/harness
       if ((path === '/command' || path === '/api/command') && req.method === 'POST') {
         const body = await readBody(req);
         const { command } = JSON.parse(body);
 
         let response = '';
         let aiUsed = false;
+        let action: string | null = null;
 
-        // Try AI first if available
+        // 1. Try deterministic intent routing first — this is the AI↔agent bridge.
+        //    If the user said "start trading", "panic", "buy 10 AAPL", etc.,
+        //    we execute the action and skip the conversational AI.
+        const intent = await routeIntent(command, { harness, broadcast });
+        if (intent) {
+          response = intent.reply;
+          action = intent.action;
+        }
+
+        // 2. Fall through to conversational AI if no intent matched.
         const ai = getAI();
         const memory = getMemory();
         const memoryUserId = 'local';
-        if (ai.isAvailable()) {
+        if (!intent && ai.isAvailable()) {
           try {
             let enhancedCommand = command;
             if (command.toLowerCase().includes('scan') || command.toLowerCase().includes('market')) {
@@ -495,24 +506,23 @@ export function createGateway(harness: OpenTradex, config: GatewayConfig = {}) {
           }
         }
 
-        // Fallback to basic command handling if AI not available
-        if (!aiUsed) {
-          if (command.toLowerCase().includes('scan')) {
-            const markets = await harness.scanAll(5);
-            response = `Found ${markets.length} markets:\n${markets.map((m) => `- ${m.exchange}: ${m.symbol} @ ${m.price}`).join('\n')}`;
-          } else if (command.toLowerCase().includes('risk')) {
-            const state = getRiskState();
-            response = `Risk State:\n- Daily P&L: $${state.dailyPnL.toFixed(2)}\n- Open Positions: ${state.openPositions.length}\n- Trades Today: ${state.dailyTrades}`;
-          } else if (command.toLowerCase().includes('status')) {
+        // 3. Deterministic fallback if neither intent nor AI produced output.
+        if (!intent && !aiUsed) {
+          if (command.toLowerCase().includes('status')) {
             const mode = readModeLock();
             response = `Status: ${mode || 'not configured'}\nExchanges: ${harness.exchanges.join(', ')}`;
           } else {
-            response = `Command received: "${command}"\n\nAI not configured. Run \`npx opentradex onboard\` to enable AI features.\n\nBasic commands available:\n- "scan markets"\n- "risk status"\n- "show status"`;
+            response = `Command received: "${command}"\n\nAI not configured. Run \`npx opentradex onboard\` to enable AI features.\n\nBasic commands available:\n- "start trading"  (autonomous loop)\n- "stop trading"\n- "scan markets"\n- "risk"  (daily P&L)\n- "positions"\n- "panic"  (flatten all)\n- "buy 10 AAPL" / "sell 5 BTC"`;
           }
         }
 
-        broadcast('command', { command, response, aiUsed });
-        return json(res, { command, response, aiUsed });
+        // Remember both user input and our reply when memory is available.
+        if (intent) {
+          void memory.remember({ userId: memoryUserId, userMessage: command, assistantMessage: response });
+        }
+
+        broadcast('command', { command, response, aiUsed, action });
+        return json(res, { command, response, aiUsed, action });
       }
 
       // Panic

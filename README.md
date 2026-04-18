@@ -15,6 +15,8 @@ One harness. Every market. Paper by default. Your keys, your rules.
 
 ![Dashboard Preview](docs/dashboard-preview.png)
 
+**[60-second Quickstart →](docs/quickstart.md)**
+
 </div>
 
 ---
@@ -60,8 +62,11 @@ npx opentradex onboard --paper-only && npx opentradex run
 
 ### Desktop (Windows / macOS / Linux)
 
-Grab the installer from [**Releases**](https://github.com/deonmenezes/opentradex/releases)
-or build it yourself:
+Grab the **signed installer** from [**Releases**](https://github.com/deonmenezes/opentradex/releases) —
+Windows builds are Authenticode-signed, macOS builds are Developer ID-signed and notarized,
+so no SmartScreen or Gatekeeper warnings on install.
+
+Prefer to build it yourself (unsigned dev build)?
 
 ```bash
 git clone https://github.com/deonmenezes/opentradex.git
@@ -71,7 +76,22 @@ npm run build:all
 npm run build:desktop:win   # or :mac / :linux
 ```
 
-Installer lands in `packages/desktop/release/`.
+Installer lands in `packages/desktop/release/`. Code-signing is automatically skipped
+when the env vars below are absent, so local dev builds always work.
+
+#### Signing env vars (release only)
+
+The `.github/workflows/release.yml` pipeline picks these up on tag push (`git tag v1.0.0 && git push --tags`):
+
+| Variable | Purpose |
+|---|---|
+| `CSC_LINK` | Windows `.pfx` cert (path or base64) for Authenticode |
+| `CSC_KEY_PASSWORD` | Password for the `.pfx` |
+| `APPLE_ID` | Apple ID email for notarization |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from appleid.apple.com |
+| `APPLE_TEAM_ID` | 10-character Team ID from developer.apple.com |
+
+Store these as GitHub Actions secrets. They are never logged and never bundled into the installer.
 
 ### Mobile
 

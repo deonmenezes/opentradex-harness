@@ -21,6 +21,7 @@ export interface TradeResult {
   success: boolean;
   orderId?: string;
   symbol: string;
+  exchange?: string;
   side: 'buy' | 'sell';
   quantity: number;
   price: number;
@@ -143,6 +144,7 @@ export class TradeExecutor extends EventEmitter {
       success: true,
       orderId: order.id,
       symbol: order.symbol,
+      exchange: mapExchange(order.exchange || 'tradingview'),
       side: order.side,
       quantity: order.quantity,
       price: filledPrice,

@@ -26,6 +26,7 @@ import { scan as kalshiScan, order as kalshiOrder } from '../rails/kalshi.js';
 import { scan as polyScan, order as polyOrder } from '../rails/polymarket.js';
 import { scan as alpacaScan, order as alpacaOrder } from '../rails/alpaca.js';
 import { scan as cbScan, order as cbOrder } from '../rails/coinbase.js';
+import { startDashboard } from '../lib/dashboard.js';
 import { stdin as input, stdout as output } from 'node:process';
 import { createInterface } from 'node:readline/promises';
 
@@ -58,6 +59,7 @@ function help() {
       'sell <position-id> [price]',
       'positions', 'trades', 'risk', 'panic',
       'keys', 'keys-delete <rail>',
+      'dashboard [--port N]',
     ],
     paperOnly: true,
   });
@@ -205,6 +207,16 @@ function keysDeleteCmd(rail) {
   out({ ok: true, removed, rail });
 }
 
+async function dashboardCmd(args) {
+  let port = 3300;
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === '--port' && args[i + 1]) { port = Number(args[i + 1]); i++; }
+    else if (/^--port=/.test(args[i])) port = Number(args[i].split('=')[1]);
+  }
+  await startDashboard({ port });
+  await new Promise(() => {});
+}
+
 async function main() {
   const [, , cmd, ...args] = process.argv;
   try {
@@ -222,6 +234,7 @@ async function main() {
       case 'panic': return await panicCmd();
       case 'keys': return keysCmd();
       case 'keys-delete': return keysDeleteCmd(args[0]);
+      case 'dashboard': return await dashboardCmd(args);
       default: return fail(`unknown subcommand: ${cmd}`);
     }
   } catch (e) {

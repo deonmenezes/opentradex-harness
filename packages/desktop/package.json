@@ -1,6 +1,6 @@
 {
   "name": "@opentradex/desktop",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "OpenTradex Desktop App - Trading Command Cockpit",
   "author": "deonmenezes",
@@ -29,6 +29,7 @@
         "to": "dashboard"
       }
     ],
+    "forceCodeSigning": false,
     "win": {
       "target": [
         {
@@ -41,7 +42,10 @@
         }
       ],
       "icon": "assets/icon.ico",
-      "publisherName": "OpenTradex"
+      "publisherName": "OpenTradex",
+      "signingHashAlgorithms": ["sha256"],
+      "signDlls": false,
+      "rfc3161TimeStampServer": "http://timestamp.digicert.com"
     },
     "mac": {
       "target": [
@@ -57,7 +61,10 @@
       "icon": "assets/icon.icns",
       "category": "public.app-category.finance",
       "hardenedRuntime": true,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist",
+      "notarize": false
     },
     "linux": {
       "target": ["AppImage", "deb", "snap"],

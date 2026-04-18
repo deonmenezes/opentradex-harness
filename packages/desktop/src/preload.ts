@@ -11,6 +11,18 @@ contextBridge.exposeInMainWorld('opentradex', {
   // App info
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
+  // Secrets / keychain — narrow surface, never exposes plaintext after save.
+  secrets: {
+    list: (): Promise<{ names: string[]; canEncrypt: boolean }> =>
+      ipcRenderer.invoke('secrets:list'),
+    save: (provider: string, apiKey: string): Promise<{ ok: boolean; provider?: string; encrypted?: boolean; error?: string }> =>
+      ipcRenderer.invoke('secrets:save', { provider, apiKey }),
+    delete: (provider: string): Promise<{ ok: boolean; provider?: string; error?: string }> =>
+      ipcRenderer.invoke('secrets:delete', { provider }),
+    canEncrypt: (): Promise<{ canEncrypt: boolean }> =>
+      ipcRenderer.invoke('secrets:canEncrypt'),
+  },
+
   // Events from main process
   onRunCycle: (callback: () => void) => {
     ipcRenderer.on('run-cycle', callback);
@@ -39,6 +51,12 @@ declare global {
     opentradex: {
       getGatewayUrl: () => Promise<string>;
       getAppVersion: () => Promise<string>;
+      secrets: {
+        list: () => Promise<{ names: string[]; canEncrypt: boolean }>;
+        save: (provider: string, apiKey: string) => Promise<{ ok: boolean; provider?: string; encrypted?: boolean; error?: string }>;
+        delete: (provider: string) => Promise<{ ok: boolean; provider?: string; error?: string }>;
+        canEncrypt: () => Promise<{ canEncrypt: boolean }>;
+      };
       onRunCycle: (callback: () => void) => () => void;
       onToggleAutoloop: (callback: () => void) => () => void;
       onPanic: (callback: () => void) => () => void;

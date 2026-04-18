@@ -1,6 +1,6 @@
 {
   "name": "opentradex",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Lightweight AI trading harness for prediction markets, stocks, and crypto. Paper-first, easily switchable to live. Includes desktop app and web dashboard.",
   "type": "module",
   "main": "dist/index.js",
@@ -27,7 +27,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-assets.js",
     "build:all": "npm run build && npm run build:dashboard",
     "build:dashboard": "cd packages/dashboard && npm install && npm run build",
     "build:desktop": "cd packages/desktop && npm install && npm run build",
@@ -40,7 +40,7 @@
     "onboard": "node dist/bin/cli.js onboard",
     "ui": "npm run build:all && node packages/dashboard/dist/server.js",
     "desktop": "cd packages/desktop && npm run dev",
-    "test": "node --test dist/**/*.test.js",
+    "test": "tsx --test src/gateway/gateway.test.ts src/gateway/gateway-auth.test.ts src/config.test.ts src/risk.test.ts src/onboard.test.ts src/pair-qr.test.ts packages/desktop/src/secrets.test.ts",
     "clean": "rm -rf dist packages/dashboard/dist packages/desktop/dist packages/desktop/release"
   },
   "keywords": [
@@ -72,11 +72,15 @@
   ],
   "dependencies": {
     "@anthropic-ai/sdk": "^0.89.0",
+    "@types/qrcode": "^1.5.6",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
     "viem": "^2.48.0",
     "x402-fetch": "^1.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.4.0"
   },
   "engines": {

@@ -105,13 +105,13 @@ test('dashboard HTML is served', async () => {
   assert(r.ok, `HTTP ${r.status}`);
   const html = await r.text();
   assert(html.includes('OpenTradex'), 'contains title');
-  assert(/assets\/index-[A-Za-z0-9]+\.js/.test(html), 'references hashed JS bundle');
-  assert(/assets\/index-[A-Za-z0-9]+\.css/.test(html), 'references hashed CSS bundle');
+  assert(/assets\/index-[A-Za-z0-9_-]+\.js/.test(html), 'references hashed JS bundle');
+  assert(/assets\/index-[A-Za-z0-9_-]+\.css/.test(html), 'references hashed CSS bundle');
 });
 
 test('dashboard bundle includes all agent command center components', async () => {
   const html = await (await fetch(`${BASE}/`, { signal: AbortSignal.timeout(5000) })).text();
-  const jsPath = html.match(/assets\/index-[A-Za-z0-9]+\.js/)?.[0];
+  const jsPath = html.match(/assets\/index-[A-Za-z0-9_-]+\.js/)?.[0];
   assert(jsPath, 'JS bundle path found');
   const js = await (await fetch(`${BASE}/${jsPath}`, { signal: AbortSignal.timeout(10000) })).text();
   const needles = [
@@ -119,6 +119,7 @@ test('dashboard bundle includes all agent command center components', async () =
     'flow-visualizer','flow-node-','suggestions','audit-panel',
     'harness-status','palette-trigger','skills-nav','scraper-badge','active-runs-badge',
     'chain-builder','chain-trigger','chain-run','chain-dryrun','shortcuts-help','help-trigger',
+    'autonomous-toggle',
   ];
   for (const n of needles) {
     assert(js.includes(n), `bundle includes testid ${n}`);

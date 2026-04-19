@@ -182,6 +182,55 @@ export default memo(function TopBar({
           </span>
         </div>
 
+        {/* Central AUTONOMOUS toggle — flips the agent's autoloop on/off.
+            Paper-mode by default; live-mode is still gated on `tradingMode=live-allowed`. */}
+        <button
+          onClick={() => {
+            if (status.isAutoLoop) {
+              if (onSetLoopInterval) onSetLoopInterval(0);
+              else if (onToggleAutoLoop) onToggleAutoLoop();
+            } else {
+              const minutes = status.cycleInterval || 5;
+              if (onSetLoopInterval) onSetLoopInterval(minutes);
+              else if (onToggleAutoLoop) onToggleAutoLoop();
+            }
+          }}
+          data-testid="autonomous-toggle"
+          data-active={status.isAutoLoop}
+          aria-pressed={status.isAutoLoop}
+          title={status.isAutoLoop
+            ? `Autonomous ON — scanning every ${status.cycleInterval}m. Click to stop.`
+            : 'Click to start autonomous trading (paper mode). Live mode still requires explicit confirmation.'}
+          className={`relative flex items-center gap-2 px-3 md:px-5 py-2 rounded-lg font-bold text-xs md:text-sm uppercase tracking-wider transition-all ${
+            status.isAutoLoop
+              ? 'bg-accent text-bg shadow-lg shadow-accent/50 ring-2 ring-accent/60'
+              : 'bg-surface-2 text-text-dim border-2 border-dashed border-border hover:border-accent hover:text-accent'
+          }`}
+        >
+          {status.isAutoLoop && (
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-accent" />
+            </span>
+          )}
+          <svg
+            className={`w-4 h-4 ${status.isAutoLoop ? 'animate-spin' : ''}`}
+            style={{ animationDuration: '3s' }}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2}
+              d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          <span className="hidden sm:inline">
+            {status.isAutoLoop ? `Autonomous · ${status.cycleInterval}m` : 'Autonomous'}
+          </span>
+          <span className="sm:hidden">
+            {status.isAutoLoop ? 'ON' : 'AUTO'}
+          </span>
+        </button>
+
         {/* Stats - inline chips on large screens */}
         <div className="hidden xl:flex items-center gap-3 text-xs">
           <button

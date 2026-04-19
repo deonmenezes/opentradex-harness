@@ -210,10 +210,13 @@ interface BinanceTicker {
 }
 
 export async function scrapeBinanceTickers(topN = 50): Promise<ScrapedExchangeEvent[]> {
-  const url = `https://api.binance.com/api/v3/ticker/24hr`;
+  // api.binance.com geo-blocks US (HTTP 451). The public data mirror works everywhere.
+  const primary = 'https://data-api.binance.vision/api/v3/ticker/24hr';
+  const fallback = 'https://api.binance.com/api/v3/ticker/24hr';
 
   try {
-    const res = await smartFetch(url);
+    let res = await smartFetch(primary);
+    if (!res.ok) res = await smartFetch(fallback);
     if (!res.ok) return [];
 
     const tickers = res.json<BinanceTicker[]>();

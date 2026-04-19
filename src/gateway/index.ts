@@ -937,6 +937,15 @@ export function createGateway(harness: OpenTradex, config: GatewayConfig = {}) {
         return json(res, { health: scraper.getExchangeHealth() });
       }
 
+      // Ranked trade candidates across all exchanges — used by dashboard + auto-loop (US-013)
+      if (path === '/api/agent/candidates') {
+        const { aggregateSignals } = await import('../agent/strategies/index.js');
+        const scraper = getScraperService();
+        const topN = parseInt(params.get('topN') || '10');
+        const candidates = aggregateSignals(scraper.getExchangeEvents(), { topN: Math.min(Math.max(topN, 1), 50) });
+        return json(res, { candidates });
+      }
+
       // Force refresh all scraped data
       if ((path === '/api/scraper/refresh') && req.method === 'POST') {
         const scraper = getScraperService();

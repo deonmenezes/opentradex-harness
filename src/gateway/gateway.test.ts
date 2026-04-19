@@ -15,7 +15,7 @@ async function startGateway(opts: { requireAuth?: boolean; timeoutMs?: number; p
   const gw: GW = createGateway(harness, {
     port: 0,
     host: '127.0.0.1',
-    requireAuth: opts.requireAuth,
+    requireAuth: opts.requireAuth ?? false,
     timeoutMs: opts.timeoutMs ?? 30_000,
   });
 
